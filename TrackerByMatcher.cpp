@@ -368,360 +368,7 @@ namespace tbm {      ///  tracking by matching
 
     }  // anonymous namespace
 
-    ///
-    /// \brief Tracker-by-Matching algorithm implementation.
-    ///
-    /// This class is implementation of tracking-by-matching system. It uses two
-    /// different appearance measures to compute affinity between bounding boxes:
-    /// some fast descriptor and some strong descriptor. Each time the assignment
-    /// problem is solved. The assignment problem in our case is how to establish
-    /// correspondence between existing tracklets and recently detected objects.
-    /// First step is to compute an affinity matrix between tracklets and
-    /// detections. The affinity equals to
-    ///       appearance_affinity * motion_affinity * shape_affinity.
-    /// Where appearance is 1 - distance(tracklet_fast_dscr, detection_fast_dscr).
-    /// Second step is to solve the assignment problem using Kuhn-Munkres
-    /// algorithm. If correspondence between some tracklet and detection is
-    /// established with low confidence (affinity) then the strong descriptor is
-    /// used to determine if there is correspondence between tracklet and detection.
-    ///
-    class TrackerByMatching : public ITrackerByMatching {
-    public:
-        using Descriptor = std::shared_ptr<IImageDescriptor>;
-        using Distance = std::shared_ptr<IDescriptorDistance>;
 
-        ///
-        /// \brief Constructor that creates an instance of the tracker with
-        /// parameters.
-        /// \param[in] params - the tracker parameters.
-        ///
-        explicit TrackerByMatching(const TrackerParams &params = TrackerParams());
-
-        virtual ~TrackerByMatching() {}
-
-        ///
-        /// \brief Process given frame.
-        /// \param[in] frame Colored image (CV_8UC3).
-        /// \param[in] detections Detected objects on the frame.
-        /// \param[in] timestamp Timestamp must be positive and measured in
-        /// milliseconds
-        ///
-        void process(const cv::Mat &frame, const TrackedObjects &detections,
-                     uint64_t timestamp) override;
-
-        ///
-        /// \brief Pipeline parameters getter.
-        /// \return Parameters of pipeline.
-        ///
-        const TrackerParams &params() const override;
-
-        ///
-        /// \brief Pipeline parameters setter.
-        /// \param[in] params Parameters of pipeline.
-        ///
-        void setParams(const TrackerParams &params) override;
-
-        ///
-        /// \brief Fast descriptor getter.
-        /// \return Fast descriptor used in pipeline.
-        ///
-        const Descriptor &descriptorFast() const override;
-
-        ///
-        /// \brief Fast descriptor setter.
-        /// \param[in] val Fast descriptor used in pipeline.
-        ///
-        void setDescriptorFast(const Descriptor &val) override;
-
-        ///
-        /// \brief Strong descriptor getter.
-        /// \return Strong descriptor used in pipeline.
-        ///
-        const Descriptor &descriptorStrong() const override;
-
-        ///
-        /// \brief Strong descriptor setter.
-        /// \param[in] val Strong descriptor used in pipeline.
-        ///
-        void setDescriptorStrong(const Descriptor &val) override;
-
-        ///
-        /// \brief Fast distance getter.
-        /// \return Fast distance used in pipeline.
-        ///
-        const Distance &distanceFast() const override;
-
-        ///
-        /// \brief Fast distance setter.
-        /// \param[in] val Fast distance used in pipeline.
-        ///
-        void setDistanceFast(const Distance &val) override;
-
-        ///
-        /// \brief Strong distance getter.
-        /// \return Strong distance used in pipeline.
-        ///
-        const Distance &distanceStrong() const override;
-
-        ///
-        /// \brief Strong distance setter.
-        /// \param[in] val Strong distance used in pipeline.
-        ///
-        void setDistanceStrong(const Distance &val) override;
-
-        ///
-        /// \brief Returns number of counted people.
-        /// \return a number of counted people.
-        ///
-        size_t count() const override;
-
-        ///
-        /// \brief Get active tracks to draw
-        /// \return Active tracks.
-        ///
-        std::unordered_map<size_t, std::vector<cv::Point> > getActiveTracks() const override;
-
-        ///
-        /// \brief Get tracked detections.
-        /// \return Tracked detections.
-        ///
-        TrackedObjects trackedDetections() const override;
-
-        ///
-        /// \brief Draws active tracks on a given frame.
-        /// \param[in] frame Colored image (CV_8UC3).
-        /// \return Colored image with drawn active tracks.
-        ///
-        cv::Mat drawActiveTracks(const cv::Mat &frame) override;
-
-        ///
-        /// \brief Print confusion matrices of data association classifiers.
-        /// It works only in case of loaded detection logs instead of native
-        /// detectors.
-        ///
-        void PrintConfusionMatrices() const;
-
-        ///
-        /// \brief isTrackForgotten returns true if track is forgotten.
-        /// \param id Track ID.
-        /// \return true if track is forgotten.
-        ///
-        bool isTrackForgotten(size_t id) const override;
-
-        ///
-        /// \brief tracks Returns all tracks including forgotten (lost too many frames
-        /// ago).
-        /// \return Set of tracks {id, track}.
-        ///
-        const std::unordered_map<size_t, Track> &tracks() const override;
-
-        ///
-        /// \brief isTrackValid Checks whether track is valid (duration > threshold).
-        /// \param track_id Index of checked track.
-        /// \return True if track duration exceeds some predefined value.
-        ///
-        bool isTrackValid(size_t track_id) const override;
-
-        ///
-        /// \brief dropForgottenTracks Removes tracks from memory that were lost too
-        /// many frames ago.
-        ///
-        void dropForgottenTracks() override;
-
-        ///
-        /// \brief dropForgottenTrack Check that the track was lost too many frames
-        /// ago
-        /// and removes it frm memory.
-        ///
-        void dropForgottenTrack(size_t track_id) override;
-
-    private:
-        struct Match {
-            int frame_idx1;
-            int frame_idx2;
-            cv::Rect rect1;
-            cv::Rect rect2;
-            cv::Rect pr_rect1;
-            bool pr_label;
-            bool gt_label;
-
-            Match() {}
-
-            Match(const TrackedObject &a, const cv::Rect &a_pr_rect,
-                  const TrackedObject &b, bool pr_label)
-                    : frame_idx1(a.frame_idx),
-                      frame_idx2(b.frame_idx),
-                      rect1(a.rect),
-                      rect2(b.rect),
-                      pr_rect1(a_pr_rect),
-                      pr_label(pr_label),
-                      gt_label(a.object_id == b.object_id) {
-                CV_Assert(frame_idx1 != frame_idx2);
-            }
-        };
-
-
-        const ObjectTracks all_tracks(bool valid_only) const;
-
-        // Returns shape affinity.
-        static float ShapeAffinity(float w, const cv::Rect &trk, const cv::Rect &det);
-
-        // Returns motion affinity.
-        static float MotionAffinity(float w, const cv::Rect &trk,
-                                    const cv::Rect &det);
-
-        // Returns time affinity.
-        static float TimeAffinity(float w, const float &trk, const float &det);
-
-        cv::Rect PredictRect(size_t id, size_t k, size_t s) const;
-
-        cv::Rect PredictRectSmoothed(size_t id, size_t k, size_t s) const;
-
-        cv::Rect PredictRectSimple(size_t id, size_t k, size_t s) const;
-
-        void SolveAssignmentProblem(
-                const std::set<size_t> &track_ids, const TrackedObjects &detections,
-                const std::vector<cv::Mat> &descriptors,
-                CV_OUT std::set<size_t> &unmatched_tracks,
-                CV_OUT std::set<size_t> &unmatched_detections,
-                CV_OUT std::set<std::tuple<size_t, size_t, float>> &matches);
-
-        void ComputeFastDesciptors(const cv::Mat &frame,
-                                   const TrackedObjects &detections,
-                                   CV_OUT std::vector<cv::Mat> &desriptors);
-
-        void ComputeDissimilarityMatrix(const std::set<size_t> &active_track_ids,
-                                        const TrackedObjects &detections,
-                                        const std::vector<cv::Mat> &fast_descriptors,
-                                        CV_OUT cv::Mat &dissimilarity_matrix);
-
-        std::vector<float> ComputeDistances(
-                const cv::Mat &frame,
-                const TrackedObjects &detections,
-                const std::vector<std::pair<size_t, size_t>> &track_and_det_ids,
-                CV_OUT std::map<size_t, cv::Mat> &det_id_to_descriptor);
-
-        std::map<size_t, std::pair<bool, cv::Mat>> StrongMatching(
-                const cv::Mat &frame,
-                const TrackedObjects &detections,
-                const std::vector<std::pair<size_t, size_t>> &track_and_det_ids);
-
-        std::vector<std::pair<size_t, size_t>> GetTrackToDetectionIds(
-                const std::set<std::tuple<size_t, size_t, float>> &matches);
-
-        float AffinityFast(const cv::Mat &descriptor1, const TrackedObject &obj1,
-                           const cv::Mat &descriptor2, const TrackedObject &obj2);
-
-        float Affinity(const TrackedObject &obj1, const TrackedObject &obj2);
-
-        void AddNewTrack(const cv::Mat &frame, const TrackedObject &detection,
-                         const cv::Mat &fast_descriptor,
-                         const cv::Mat &descriptor_strong = cv::Mat());
-
-        void AddNewTracks(const cv::Mat &frame, const TrackedObjects &detections,
-                          const std::vector<cv::Mat> &descriptors_fast);
-
-        void AddNewTracks(const cv::Mat &frame, const TrackedObjects &detections,
-                          const std::vector<cv::Mat> &descriptors_fast,
-                          const std::set<size_t> &ids);
-
-        void AppendToTrack(const cv::Mat &frame, size_t track_id,
-                           const TrackedObject &detection,
-                           const cv::Mat &descriptor_fast,
-                           const cv::Mat &descriptor_strong);
-
-        bool EraseTrackIfBBoxIsOutOfFrame(size_t track_id);
-
-        bool EraseTrackIfItWasLostTooManyFramesAgo(size_t track_id);
-
-        bool UpdateLostTrackAndEraseIfItsNeeded(size_t track_id);
-
-        void UpdateLostTracks(const std::set<size_t> &track_ids);
-
-        static cv::Mat ConfusionMatrix(const std::vector<Match> &matches);
-
-        const std::set<size_t> &active_track_ids() const;
-
-        // Returns decisions made by heuristic based on fast distance/descriptor and
-        // shape, motion and time affinity.
-        const std::vector<Match> &base_classifier_matches() const;
-
-        // Returns decisions made by heuristic based on strong distance/descriptor
-        // and
-        // shape, motion and time affinity.
-        const std::vector<Match> &reid_based_classifier_matches() const;
-
-        // Returns decisions made by strong distance/descriptor affinity.
-        const std::vector<Match> &reid_classifier_matches() const;
-
-        TrackedObjects FilterDetections(const TrackedObjects &detections) const;
-
-        bool isTrackForgotten(const Track &track) const;
-
-        // Parameters of the pipeline.
-        TrackerParams params_;
-
-        // Indexes of active tracks.
-        std::set<size_t> active_track_ids_;
-
-        // Descriptor fast (base classifer).
-        Descriptor descriptor_fast_;
-
-        // Distance fast (base classifer).
-        Distance distance_fast_;
-
-        // Descriptor strong (reid classifier).
-        Descriptor descriptor_strong_;
-
-        // Distance strong (reid classifier).
-        Distance distance_strong_;
-
-        // All tracks.
-        std::unordered_map<size_t, Track> tracks_;
-
-        // Previous frame image.
-        cv::Size prev_frame_size_;
-
-        struct pair_hash {
-            std::size_t operator()(const std::pair<size_t, size_t> &p) const {
-                CV_Assert(p.first < 1e6 && p.second < 1e6);
-                return static_cast<size_t>(p.first * 1e6 + p.second);
-            }
-        };
-
-        // Distance between current active tracks.
-        std::unordered_map<std::pair<size_t, size_t>, float, pair_hash> tracks_dists_;
-
-        // Whether collect matches and compute confusion matrices for
-        // track-detection
-        // association task (base classifier, reid-based classifier,
-        // reid-classiifer).
-        bool collect_matches_;
-
-        // This vector contains decisions made by
-        // fast_apperance-motion-shape affinity model.
-        std::vector<Match> base_classifier_matches_;
-
-        // This vector contains decisions made by
-        // strong_apperance(cnn-reid)-motion-shape affinity model.
-        std::vector<Match> reid_based_classifier_matches_;
-
-        // This vector contains decisions made by
-        // strong_apperance(cnn-reid) affinity model only.
-        std::vector<Match> reid_classifier_matches_;
-
-        // Number of all current tracks.
-        size_t tracks_counter_;
-
-        // Number of dropped valid tracks.
-        size_t valid_tracks_counter_;
-
-        cv::Size frame_size_;
-
-        std::vector<cv::Scalar> colors_;
-
-        uint64_t prev_timestamp_;
-    };
 
     cv::Ptr<ITrackerByMatching> createTrackerByMatching(const TrackerParams &params) {
         ITrackerByMatching *ptr = new TrackerByMatching(params);
@@ -1579,103 +1226,49 @@ namespace tbm {      ///  tracking by matching
     }
 
     TrackedObjects
-    TrackerByMatcher::detect(const cv::Mat &frame, const std::vector<DetectBox> &bboxInfo, int frame_idx) {
-        std::vector<float> result_confidences;  //目标框置信度
-        std::vector<Rect> result_boxes;    //目标框bbox
+    TrackerByMatcher::nms(const cv::Mat &frame, const std::vector<DetectBox> &bboxInfo, int frame_idx) {
+
+        TrackedObjects valid_objs;
+
+        // 对所有检测到的目标框，先过滤一遍
         for (const DetectBox &boxInfo : bboxInfo) {
             int class_id = boxInfo.class_id;
             if (!desired_class_id.empty() &&
                 find(desired_class_id.begin(), desired_class_id.end(), class_id) == desired_class_id.end())
                 continue;
-            result_confidences.emplace_back(boxInfo.confidence);
-            result_boxes.emplace_back(boxInfo.box);
-        }
 
-        TrackedObjects res;
-        for (int i = 0; i < result_boxes.size(); i++) {
-            float cur_confidence = result_confidences[i];
-            //int cur_class_id = result_classIds[i];
+            float cur_confidence = boxInfo.confidence;   // 置信度
+            Rect cur_rect = boxInfo.box;                 // 目标框
 
-            Rect cur_rect = result_boxes[i];
-
-            //clipping by frame size
-            cur_rect = cur_rect & Rect(Point(), frame.size());
+            cur_rect &= Rect(Point(), frame.size());
             if (cur_rect.empty())
                 continue;
 
-            TrackedObject cur_obj(cur_rect, cur_confidence, frame_idx, -1);
-            res.emplace_back(cur_obj);
+            valid_objs.emplace_back(TrackedObject(cur_rect, cur_confidence, frame_idx, -1));
         }
-        return res;
+        return valid_objs;
     }
 
     TrackedObjects TrackerByMatcher::track(const cv::Mat &frame, const std::vector<DetectBox> &origin_bboxes,
                                            unsigned long long frame_counter, TrackedObjects *detectedObject) {
 
-        TrackedObjects detected_obj = this->detect(frame, origin_bboxes, frame_counter);
-
-        uint64_t cur_timestamp = static_cast<uint64_t>(1000.0 / video_fps * frame_counter);
-        tracker->process(frame, detected_obj, cur_timestamp);
+        TrackedObjects valid_objs = this->nms(frame, origin_bboxes, frame_counter);
         if (detectedObject)
-            *detectedObject = detected_obj;
+            *detectedObject = valid_objs;
+
+        auto cur_timestamp = static_cast<uint64_t>(1000.0 / video_fps * frame_counter);
+        tracker->process(frame, valid_objs, cur_timestamp);   // 跟踪核心函数
+
 
         TrackedObjects trackedObject = tracker->trackedDetections();
 
-        /// 记录每个跟踪框的第一次被跟踪的帧数
-        for (const TrackedObject &obj : trackedObject)
-            if (object_record.find(obj.object_id) == object_record.end()) {
-                object_record[obj.object_id] = obj.frame_idx;
-            }
+//        /// 记录每个跟踪框的第一次被跟踪的帧数
+//        for (const TrackedObject &obj : trackedObject)
+//            if (object_record.find(obj.object_id) == object_record.end()) {
+//                object_record[obj.object_id] = obj.frame_idx;
+//            }
         return trackedObject;
     }
-
-
-    //  TrackerParams
-    //min_track_duration(1000),  最小跟踪时间 / ms
-    //forget_delay(150),      如果最后检测到的box框超过该帧数，则遗忘该轨迹
-    //aff_thr_fast(0.8f),     用于判断小段轨迹和检测框是否关联的亲和力阈值（快描述子使用）, 值越小，则越容易匹配，不容易跟丢，但可能switch id
-    //aff_thr_strong(0.75f),   用于判断小段轨迹和检测框是否关联的亲和力阈值（强描述子使用）
-    //shape_affinity_w(0.5f),   形状亲和力权重
-    //motion_affinity_w(0.2f),   运动亲和力权重
-    //time_affinity_w(0.0f),     时间亲和力权重
-    //min_det_conf(0.1f),          检测框得最小置信度
-    //bbox_aspect_ratios_range(0.666f, 5.0f),          检测框的宽高比比例范围
-    //bbox_heights_range(40.f, 1000.f),                 检测框的高度范围
-    //predict(25),                                      使用多少帧预测目标框，防止丢失轨迹
-    //strong_affinity_thr(0.2805f),            如果“快”置信度大于此阈值，则使用“强” re-id 方法。
-    //reid_thr(0.61f),                        re-id 的亲和力阈值
-    //drop_forgotten_tracks(true),
-    //max_num_objects_in_track(300)           最大跟踪数
-    cv::Ptr<ITrackerByMatching> TrackerByMatcher::createTrackerByMatchingWithFastDescriptor() {
-        TrackerParams params;
-
-        params.bbox_aspect_ratios_range = Vec2f(0.2f, 5.0f);
-        params.bbox_heights_range = Vec2f(10.f, 1080.f);
-        //params.min_track_duration = 500;
-        //params.forget_delay = 50;
-        params.aff_thr_fast = 0.5;
-        params.predict = 50;
-        params.max_num_objects_in_track = 1000;
-        cv::Ptr<ITrackerByMatching> tracker = createTrackerByMatching(params);
-
-        std::shared_ptr<IImageDescriptor> descriptor_fast = std::make_shared<ResizedImageDescriptor>(cv::Size(16, 32),
-                                                                                                     cv::InterpolationFlags::INTER_LINEAR);
-        std::shared_ptr<IDescriptorDistance> distance_fast = std::make_shared<CosDistance>(cv::Size(16, 32));
-        tracker->setDescriptorFast(descriptor_fast);
-        tracker->setDistanceFast(distance_fast);
-
-        std::shared_ptr<IImageDescriptor> descriptor_strong = std::make_shared<ResizedImageDescriptor>(cv::Size(32, 32),
-                                                                                                       cv::InterpolationFlags::INTER_LINEAR);
-        std::shared_ptr<IDescriptorDistance> distance_strong = std::make_shared<CosDistance>(cv::Size(32, 32));
-        tracker->setDescriptorStrong(descriptor_strong);
-        tracker->setDistanceStrong(distance_strong);
-
-        return tracker;
-    }
-
-
-
-
 
 }
 
