@@ -489,8 +489,7 @@ namespace tbm {      ///  tracking by matching
         return reid_classifier_matches_;
     }
 
-    TrackedObjects TrackerByMatching::FilterDetections(
-            const TrackedObjects &detections) const {
+    TrackedObjects TrackerByMatching::FilterDetections(const TrackedObjects &detections) const {
         TrackedObjects filtered_detections;
         for (const auto &det : detections) {
             float aspect_ratio = static_cast<float>(det.rect.height) / det.rect.width;
@@ -674,11 +673,12 @@ namespace tbm {      ///  tracking by matching
         std::vector<cv::Mat> descriptors_fast;
         ComputeFastDesciptors(frame, detections, descriptors_fast);
 
+
         auto active_tracks = active_track_ids_;
 
         if (!active_tracks.empty() && !detections.empty()) {
             std::set<size_t> unmatched_tracks, unmatched_detections;
-            std::set<std::tuple<size_t, size_t, float>> matches;
+            std::set<std::tuple<size_t, size_t, float>> matches;    //  {track_id, detecton_id, score}
 
             SolveAssignmentProblem(active_tracks, detections, descriptors_fast,
                                    unmatched_tracks,
@@ -954,9 +954,7 @@ namespace tbm {      ///  tracking by matching
         return is_matching;
     }
 
-    void TrackerByMatching::AddNewTracks(
-            const cv::Mat &frame, const TrackedObjects &detections,
-            const std::vector<cv::Mat> &descriptors_fast) {
+    void TrackerByMatching::AddNewTracks(const cv::Mat &frame, const TrackedObjects &detections, const std::vector<cv::Mat> &descriptors_fast) {
         CV_Assert(detections.size() == descriptors_fast.size());
         for (size_t i = 0; i < detections.size(); i++) {
             AddNewTrack(frame, detections[i], descriptors_fast[i]);
@@ -979,8 +977,7 @@ namespace tbm {      ///  tracking by matching
                                         const cv::Mat &descriptor_strong) {
         auto detection_with_id = detection;
         detection_with_id.object_id = static_cast<int>(tracks_counter_);
-        tracks_.emplace(std::pair<size_t, Track>(
-                tracks_counter_,
+        tracks_.emplace(std::pair<size_t, Track>(tracks_counter_,
                 Track({detection_with_id}, frame(detection.rect).clone(),
                       descriptor_fast.clone(), descriptor_strong.clone())));
 

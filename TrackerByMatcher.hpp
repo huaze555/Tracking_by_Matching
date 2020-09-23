@@ -921,7 +921,7 @@ namespace tbm { //Tracking-by-Matching
                              unsigned long long frame_counter, TrackedObjects* detectedObject = nullptr);
 
         std::unordered_map<size_t, std::vector<cv::Point> > getTrackingPoints() const{return tracker->getActiveTracks();}
-        std::map<size_t, unsigned long long> getObjectRecord() const {return object_record;};
+        //std::map<size_t, unsigned long long> getObjectRecord() const {return object_record;};
         cv::Mat drawActiveTracks(const cv::Mat& frame){return tracker->drawActiveTracks(frame);}
 
     private:
